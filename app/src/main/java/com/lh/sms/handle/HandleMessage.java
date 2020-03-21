@@ -27,7 +27,9 @@ public class HandleMessage extends Handler {
             Toast.makeText(ClassUtil.get(MainActivity.class),data.getString("msg"),data.getInt("length")).show();
         }else if(msg.what==CountDownMsgTypeEnum.ALERT_SWEET.getValue()){
             //弹自定义提示框
-            ((SweetAlertDialog)msg.obj).show();
+            try {
+                ((SweetAlertDialog) msg.obj).show();
+            }catch (Exception e){}
         }else if(msg.what == CountDownMsgTypeEnum.CALL_BACK.getValue()){
             //回调指定类方法
             Bundle data = msg.getData();

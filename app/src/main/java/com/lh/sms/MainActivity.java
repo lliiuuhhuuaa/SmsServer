@@ -1,8 +1,13 @@
 package com.lh.sms;
 
 import android.Manifest;
+import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.os.Bundle;
+import android.telephony.SubscriptionInfo;
+import android.telephony.SubscriptionManager;
 import android.util.Log;
 import android.view.WindowManager;
 
@@ -10,12 +15,15 @@ import com.lh.sms.handle.HandleMessage;
 import com.lh.sms.message.service.MsgService;
 import com.lh.sms.message.service.SmsService;
 import com.lh.sms.socket.service.SocketService;
+import com.lh.sms.util.AlertUtil;
 import com.lh.sms.util.ClassUtil;
 
 import java.util.ArrayList;
 import java.util.List;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import cn.pedant.SweetAlert.SweetAlertDialog;
 import me.weyye.hipermission.HiPermission;
 import me.weyye.hipermission.PermissionCallback;
 import me.weyye.hipermission.PermissionItem;
@@ -73,9 +81,11 @@ public class MainActivity extends AppCompatActivity {
 
                     @Override
                     public void onFinish() {
-                        //启动service
-                        Intent intent = new Intent(MainActivity.this, SmsRunningService.class);
-                        startService(intent);
+                        if(selectSim()) {
+                            //启动service
+                            Intent intent = new Intent(MainActivity.this, SmsRunningService.class);
+                            startService(intent);
+                        }
                     }
 
                     @Override
@@ -88,5 +98,45 @@ public class MainActivity extends AppCompatActivity {
                         Log.i(TAG, "onGuarantee");
                     }
                 });
+    }
+    /**
+     * @do 选择卡
+     * @author liuhua
+     * @date 2020/3/21 10:10 AM
+     */
+    private boolean selectSim() {
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE) != PackageManager.PERMISSION_GRANTED) {
+            return false;
+        }
+        SubscriptionManager sManager = (SubscriptionManager) this.getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE);
+        List<SubscriptionInfo> mList = sManager.getActiveSubscriptionInfoList();
+        if (mList == null || mList.size() < 1) {
+            ClassUtil.get(MsgService.class).push("未检测到有效sim卡,请检查后重试");
+            return false;
+        }
+        if(mList.size()<2){
+            return true;
+        }
+        SharedPreferences smsInfo = getSharedPreferences("smsInfo", MODE_PRIVATE);
+        int sim = smsInfo.getInt("sim", -1);
+        if (sim < 0) {
+            StringBuffer sb = new StringBuffer();
+            sb.append("卡1:").append(mList.get(0).getIccId()).append("<br/>");
+            sb.append("卡2:").append(mList.get(1).getIccId());
+            SweetAlertDialog sweetAlertDialog = new SweetAlertDialog(this);
+            sweetAlertDialog.setTitle("请选择使用那张sim卡发送短信");
+            sweetAlertDialog.setContentText(sb.toString());
+            sweetAlertDialog.setCancelText("使用卡1").setCancelClickListener(sweetAlertDialog12 -> {
+                smsInfo.edit().putInt("sim", 0).apply();
+                sweetAlertDialog.cancel();
+                ClassUtil.get(SocketService.class).connect(mList.get(0).getIccId());
+            }).setConfirmText("使用卡2").setConfirmClickListener(sweetAlertDialog1 -> {
+                smsInfo.edit().putInt("sim", 0).apply();
+                sweetAlertDialog.cancel();
+                ClassUtil.get(SocketService.class).connect(mList.get(1).getIccId());
+            });
+            AlertUtil.alertOther(sweetAlertDialog);
+        }
+        return true;
     }
 }
